@@ -188,7 +188,6 @@ Do not scan URLs or data you do not own or have permission to analyze.
 
 ---
 
-That’s your **final, complete, perfect README.md** — formatted and ready for GitHub.  
-Want me to also generate a **README banner image** (PNG), **wiki pages**, or **GitHub Actions CI workflow**
+
 
 
