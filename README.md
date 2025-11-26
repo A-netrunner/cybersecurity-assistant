@@ -138,14 +138,14 @@ uvicorn main:app --reload
 API will be live at:
 http://localhost:8000
 
-###Run the Dashboard (Streamlit)
+### Run the Dashboard (Streamlit)
 streamlit run ui/app.py
 
 Dashboard at:
 
 http://localhost:8501
 
-📸 ###Screenshots (Add in docs/screenshots/)
+📸 ### Screenshots (Add in docs/screenshots/)
 
 Dashboard Home
 
@@ -168,7 +168,7 @@ Full diagrams inside:
 📄 docs/architecture.md
 📄 docs/how_it_works.md
 
-###Testing
+### Testing
 pytest -q
 
 
