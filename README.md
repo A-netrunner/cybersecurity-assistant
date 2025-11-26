@@ -145,7 +145,7 @@ Dashboard at:
 
 http://localhost:8501
 
-📸 ### Screenshots (Add in docs/screenshots/)
+ ### 📸Screenshots (Add in docs/screenshots/)
 
 Dashboard Home
 
