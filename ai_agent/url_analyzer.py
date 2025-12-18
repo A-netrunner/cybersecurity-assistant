@@ -64,7 +64,7 @@ class UrlAnalyzer:
                 self.vectorizer = None
 
         # ---- VirusTotal ----
-        self.vt_api_key = settings.VIRUSTOTAL_API_KEY
+        self.vt_api_key = settings.VT_API_KEY
 
     # ---------------- HEURISTIC SCORING ----------------
     def _heuristic_score(self, url: str) -> int:

@@ -1,82 +1,93 @@
 # ui/app.py
-import sys
-import os
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(ROOT_DIR)
 import streamlit as st
 import requests
-from responders.db_logger import DBLogger
-from memory.knowledge_store import KnowledgeStore
-from config.settings import settings
-from ui.components import metric_card, event_table, risk_trend_chart
+import pandas as pd
 
+from components import (
+    metric_card,
+    event_table,
+    risk_trend_chart,
+    confidence_label,
+    severity_color,
+)
 
-API_URL = f"http://{settings.HOST}:{settings.PORT}"
-
-db = DBLogger(settings.DATABASE_URL)
-memory = KnowledgeStore(settings.MEMORY_PATH)
+API_BASE = "http://localhost:8000"
 
 st.set_page_config(
-    page_title="Cybersec Assistant Dashboard",
-    page_icon="🛡️",
+    page_title="Cybersecurity Assistant SOC",
     layout="wide"
 )
 
-# ---------------------- SIDEBAR ----------------------
-st.sidebar.title("🛡️ Cybersec Assistant")
-page = st.sidebar.radio("Navigation", ["Home", "Analyze", "Memory"])
+st.title("🛡️ Cybersecurity Assistant – SOC Dashboard")
 
-# ---------------------- HOME -------------------------
-if page == "Home":
-    st.title("🧠 Cybersecurity Assistant Dashboard")
-    st.write("Live threat analysis, memory insights, and event monitoring.")
+# ------------------ FETCH EVENTS ------------------
+@st.cache_data(ttl=5)
+def fetch_events(limit=50):
+    try:
+        r = requests.get(f"{API_BASE}/events?limit={limit}", timeout=5)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        return []
+    return []
 
-    # Summary Cards
-    summary = memory.summary()
-    metric_card("Total Events", summary["total_events"], "All incidents logged")
-    metric_card("Average Risk Score", round(summary["avg_risk_score"], 2), "System-wide threat level", "#FF5733")
+events = fetch_events()
 
-    if summary["top_malicious_urls"]:
-        st.subheader("Top Malicious URLs")
-        st.json(summary["top_malicious_urls"])
+if not events:
+    st.info("No events logged yet.")
+    st.stop()
 
-# ---------------------- ANALYZE -----------------------
-elif page == "Analyze":
-    st.title("🔍 Analyze Input")
+df = pd.DataFrame(events)
 
-    analyze_type = st.selectbox("Select Input Type", ["URL", "Password", "Text"])
+# ------------------ FILTERS ------------------
+st.subheader("🔎 Filters")
 
-    if analyze_type == "URL":
-        url = st.text_input("Enter URL:")
-        if st.button("Analyze URL"):
-            res = requests.post(f"{API_URL}/analyze/url", json={"url": url})
-            st.json(res.json())
+col1, col2 = st.columns(2)
 
-    if analyze_type == "Password":
-        pwd = st.text_input("Enter Password:", type="password")
-        if st.button("Analyze Password"):
-            res = requests.post(f"{API_URL}/analyze/password", json={"password": pwd})
-            st.json(res.json())
+with col1:
+    type_filter = st.multiselect(
+        "Event Type",
+        options=sorted(df["type"].unique()),
+        default=list(df["type"].unique())
+    )
 
-    if analyze_type == "Text":
-        txt = st.text_area("Enter Text to Analyze:")
-        if st.button("Analyze Text"):
-            res = requests.post(f"{API_URL}/analyze/text", json={"text": txt})
-            st.json(res.json())
+with col2:
+    action_filter = st.multiselect(
+        "Action",
+        options=sorted(df["action"].unique()),
+        default=list(df["action"].unique())
+    )
 
+df = df[df["type"].isin(type_filter)]
+df = df[df["action"].isin(action_filter)]
 
-# ---------------------- MEMORY -----------------------
-elif page == "Memory":
-    st.title("🧠 System Memory")
+# ------------------ SUMMARY METRICS ------------------
+st.subheader("📊 SOC Summary")
 
-    st.subheader("Short-Term Memory (Last 10 Events)")
-    st.json(memory.last_events(10))
+c1, c2, c3 = st.columns(3)
 
-    st.subheader("Long-Term Memory Summary")
-    st.json(memory.summary())
+c1.metric("Total Events", len(df))
+c2.metric("Alerts", int((df["action"] == "alert").sum()))
+c3.metric("High Risk", int((df["score"] >= 80).sum()))
 
-    st.subheader("Find Similar Events (Text Only)")
-    query = st.text_input("Enter text to find similar past events:")
-    if st.button("Search Similar"):
-        res = memory.find_similar_events(query)
-        st.json(res)
+st.divider()
+
+# ------------------ EVENT TABLE ------------------
+st.subheader("🧾 Security Events")
+
+df_display = df.copy()
+df_display["confidence"] = df_display["score"].apply(confidence_label)
+
+st.dataframe(
+    df_display[
+        ["id", "type", "action", "score", "confidence", "reason", "created_at"]
+    ],
+    use_container_width=True,
+    hide_index=True
+)
+
+# ------------------ RISK TREND ------------------
+st.divider()
+st.subheader("📈 Risk Trend")
+
+risk_trend_chart(df.to_dict(orient="records"))
