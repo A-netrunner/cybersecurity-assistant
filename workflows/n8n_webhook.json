@@ -1,4 +1,6 @@
-{
+
+  
+  {
     "name": "Cybersec Assistant - Alert Workflow",
     "nodes": [
       {
@@ -6,32 +8,64 @@
           "path": "cybersec-assistant-webhook",
           "httpMethod": "POST",
           "responseMode": "onReceived",
-          "responseData": "={{{\"status\":\"received\"}}}"
+          "options": {}
         },
+        "id": "WebhookTrigger",
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [250, 300]
+        "position": [300, 300]
       },
       {
         "parameters": {
-          "url": "={{$node[\"Webhook Trigger\"].json[\"body\"][\"input\"] || 'No input'}}",
-          "options": {}
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{$json[\"action\"]}}",
+                "operation": "equals",
+                "value2": "alert"
+              }
+            ]
+          }
         },
+        "id": "IfAlert",
+        "name": "IF Alert",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [520, 300]
+      },
+      {
+        "parameters": {
+          "fromEmail": "your_email@gmail.com",
+          "toEmail": "receiver_email@gmail.com",
+          "subject": "🚨 Cybersecurity Alert – High Risk Event",
+          "text": "🚨 CYBERSECURITY ALERT 🚨\n\nType: {{$json[\"type\"]}}\nAction: {{$json[\"action\"]}}\nRisk Score: {{$json[\"combined_score\"] || $json[\"risk_score\"]}}\nConfidence: {{$json[\"confidence\"]}}\nReason: {{$json[\"reason\"]}}\n\nGenerated At: {{$now}}"
+        },
+        "id": "EmailAlert",
+        "name": "Send Email Alert",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 1,
+        "position": [760, 200],
+        "credentials": {
+          "smtp": {
+            "id": "SMTP_CREDENTIAL_ID",
+            "name": "SMTP Credentials"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "http://localhost:8000/events",
+          "method": "POST",
+          "jsonParameters": true,
+          "options": {},
+          "bodyParametersJson": "={{JSON.stringify($json)}}"
+        },
+        "id": "HttpLogger",
         "name": "HTTP Request (Logger)",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 1,
-        "position": [700, 300]
-      },
-      {
-        "parameters": {
-          "webhookUrl": "https://hooks.slack.com/services/REPLACE/WITH/SLACK_WEBHOOK",
-          "text": "={{`Cybersec Alert: type=${$node[\"Webhook Trigger\"].json[\"body\"][\"type\"]} action=${$node[\"Webhook Trigger\"].json[\"body\"][\"action\"]} score=${$node[\"Webhook Trigger\"].json[\"body\"][\"combined_score\"]} reason=${$node[\"Webhook Trigger\"].json[\"body\"][\"reason\"]}`}}"
-        },
-        "name": "Slack - Post Incoming Webhook",
-        "type": "n8n-nodes-base.slack",
-        "typeVersion": 1,
-        "position": [450, 150]
+        "position": [760, 420]
       }
     ],
     "connections": {
@@ -39,10 +73,23 @@
         "main": [
           [
             {
-              "node": "Slack - Post Incoming Webhook",
+              "node": "IF Alert",
               "type": "main",
               "index": 0
-            },
+            }
+          ]
+        ]
+      },
+      "IF Alert": {
+        "main": [
+          [
+            {
+              "node": "Send Email Alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
             {
               "node": "HTTP Request (Logger)",
               "type": "main",
@@ -54,6 +101,6 @@
     },
     "active": false,
     "settings": {},
-    "id": null
+    "versionId": "1"
   }
   
