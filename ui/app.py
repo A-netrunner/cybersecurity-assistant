@@ -64,7 +64,7 @@ with tab1:
             try:
                 r = requests.post(
                     API_BASE + endpoint,
-                    json={payload_key: value},
+                    json=payload,
                     timeout=10
                 )
 

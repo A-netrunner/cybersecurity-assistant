@@ -1,52 +1,134 @@
 # ai_agent/agent_decision.py
-"""
-Decision Agent
-
-Responsibilities:
-- Fuse analyzer outputs
-- Apply security policy
-- Decide action
-- Explain decision (for audit & viva)
-"""
-
 from typing import Dict, Any
+
+from ai_agent.url_analyzer import UrlAnalyzer
+from ai_agent.text_detector import TextDetector
+from ai_agent.password_checker import PasswordChecker
 
 
 class AgentDecision:
+    """
+    Routes input to the correct analyzer, aggregates risk,
+    and decides: ignore / log / alert
+    """
+
     def __init__(self):
-        # Policy thresholds (can be learned later)
-        self.ALERT_THRESHOLD = 80
-        self.LOG_THRESHOLD = 40
+        self.url_analyzer = UrlAnalyzer()
+        self.text_detector = TextDetector()
+        self.password_checker = PasswordChecker()
 
-    async def route_and_decide(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+    # ------------------ UTIL ------------------
+    def _normalize_url(self, url: str) -> str:
         """
-        analysis: output from analyzer agent
+        Normalize defanged URLs so analyzers always work.
         """
-        score = int(analysis.get("risk_score", 0))
-        label = analysis.get("label", "benign")
-        source = analysis.get("source", "unknown")
+        return (
+            url.replace("hxxp://", "http://")
+               .replace("hxxps://", "https://")
+               .replace("[.]", ".")
+               .strip()
+        )
 
-        # ---------------- POLICY ENGINE ----------------
-        if score >= self.ALERT_THRESHOLD or label == "malicious":
+    # ------------------ MAIN ROUTER ------------------
+    async def route_and_decide(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        input_type = body.get("type")
+
+        # ---------- SAFETY ----------
+        if input_type not in {"url", "text", "password"}:
+            return {
+                "type": input_type,
+                "action": "ignore",
+                "combined_score": 0,
+                "confidence": "low",
+                "reason": "Invalid or missing input type",
+                "policy": "safe_default",
+                "analysis_source": "unknown",
+                "analysis": body,
+            }
+
+        # ---------- URL ----------
+        if input_type == "url":
+            raw_url = body.get("url", "")
+            normalized_url = self._normalize_url(raw_url)
+
+            analysis = await self.url_analyzer.scan_url(normalized_url)
+
+            risk = int(analysis.get("risk_score", 0))
+            label = analysis.get("label", "benign")
+
+            return self._final_decision(
+                input_type="url",
+                score=risk,
+                label=label,
+                reason=analysis.get("reason", "URL analysis"),
+                source=analysis.get("source", "heuristic"),
+                analysis={"url": normalized_url},
+            )
+
+        # ---------- TEXT ----------
+        if input_type == "text":
+            text = body.get("text", "")
+
+            analysis = await self.text_detector.analyze_text(text)
+
+            risk = int(analysis.get("risk_score", 0))
+            label = analysis.get("label", "benign")
+
+            return self._final_decision(
+                input_type="text",
+                score=risk,
+                label=label,
+                reason=analysis.get("reason", "Text analysis"),
+                source=analysis.get("source", "heuristic"),
+                analysis={"text": text[:300]},
+            )
+
+        # ---------- PASSWORD ----------
+        if input_type == "password":
+            pwd = body.get("password", "")
+
+            analysis = self.password_checker.check_password(pwd)
+
+            risk = int(analysis.get("risk_score", 0))
+            compromised = analysis.get("compromised", False)
+
+            label = "malicious" if compromised else "benign"
+
+            return self._final_decision(
+                input_type="password",
+                score=risk,
+                label=label,
+                reason="Password strength / breach analysis",
+                source="local_rules",
+                analysis={"strength": analysis.get("strength")},
+            )
+
+    # ------------------ DECISION LOGIC ------------------
+    def _final_decision(
+        self,
+        input_type: str,
+        score: int,
+        label: str,
+        reason: str,
+        source: str,
+        analysis: Dict[str, Any],
+    ) -> Dict[str, Any]:
+
+        if score >= 70:
             action = "alert"
             confidence = "high"
             policy = "high_risk_policy"
-            reason = "High risk score or malicious classification"
-
-        elif score >= self.LOG_THRESHOLD or label == "suspicious":
+        elif score >= 35:
             action = "log"
             confidence = "medium"
             policy = "medium_risk_policy"
-            reason = "Suspicious indicators detected"
-
         else:
             action = "ignore"
             confidence = "low"
             policy = "low_risk_policy"
-            reason = "No significant threat indicators"
 
         return {
-            "type": analysis.get("type"),
+            "type": input_type,
             "action": action,
             "combined_score": score,
             "confidence": confidence,
