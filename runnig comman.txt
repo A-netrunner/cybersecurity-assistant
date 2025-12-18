@@ -7,3 +7,10 @@ streamlit run ui/app.py
 
 3rd venv activation 
 .\.venv\Scripts\Activate.ps1 
+
+
+Training and Testing of my model 
+python ml_models/train_text_model.py
+python ml_models/train_url_model.py
+python ml_models/train_parquet_model.py
+
