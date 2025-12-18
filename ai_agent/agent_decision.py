@@ -52,18 +52,17 @@ class AgentDecision:
             normalized_url = self._normalize_url(raw_url)
 
             analysis = await self.url_analyzer.scan_url(normalized_url)
+            if not analysis:
+                analysis = {
+                    "risk_score": 0,
+                    "label": "benign",
+                    "reason": "URL analysis unavailable",
+                    "source": "fallback"
+                }
 
             risk = int(analysis.get("risk_score", 0))
             label = analysis.get("label", "benign")
 
-            return self._final_decision(
-                input_type="url",
-                score=risk,
-                label=label,
-                reason=analysis.get("reason", "URL analysis"),
-                source=analysis.get("source", "heuristic"),
-                analysis={"url": normalized_url},
-            )
 
         # ---------- TEXT ----------
         if input_type == "text":
@@ -71,17 +70,16 @@ class AgentDecision:
 
             analysis = await self.text_detector.analyze_text(text)
 
+            if not analysis:
+                analysis = {
+                    "risk_score": 0,
+                    "label": "benign",
+                    "reason": "Text analysis unavailable",
+                    "source": "fallback"
+                }
+
             risk = int(analysis.get("risk_score", 0))
             label = analysis.get("label", "benign")
-
-            return self._final_decision(
-                input_type="text",
-                score=risk,
-                label=label,
-                reason=analysis.get("reason", "Text analysis"),
-                source=analysis.get("source", "heuristic"),
-                analysis={"text": text[:300]},
-            )
 
         # ---------- PASSWORD ----------
         if input_type == "password":
