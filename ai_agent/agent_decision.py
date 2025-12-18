@@ -19,9 +19,6 @@ class AgentDecision:
 
     # ------------------ UTIL ------------------
     def _normalize_url(self, url: str) -> str:
-        """
-        Normalize defanged URLs so analyzers always work.
-        """
         return (
             url.replace("hxxp://", "http://")
                .replace("hxxps://", "https://")
@@ -51,45 +48,50 @@ class AgentDecision:
             raw_url = body.get("url", "")
             normalized_url = self._normalize_url(raw_url)
 
-            analysis = await self.url_analyzer.scan_url(normalized_url)
-            if not analysis:
-                analysis = {
-                    "risk_score": 0,
-                    "label": "benign",
-                    "reason": "URL analysis unavailable",
-                    "source": "fallback"
-                }
+            analysis = await self.url_analyzer.scan_url(normalized_url) or {}
 
             risk = int(analysis.get("risk_score", 0))
             label = analysis.get("label", "benign")
+            reason = analysis.get("reason", "URL analysis")
+            source = analysis.get("source", "heuristic")
 
+            return self._final_decision(
+                input_type="url",
+                score=risk,
+                label=label,
+                reason=reason,
+                source=source,
+                analysis={"url": normalized_url},
+            )
 
         # ---------- TEXT ----------
         if input_type == "text":
             text = body.get("text", "")
 
-            analysis = await self.text_detector.analyze_text(text)
-
-            if not analysis:
-                analysis = {
-                    "risk_score": 0,
-                    "label": "benign",
-                    "reason": "Text analysis unavailable",
-                    "source": "fallback"
-                }
+            analysis = await self.text_detector.analyze_text(text) or {}
 
             risk = int(analysis.get("risk_score", 0))
             label = analysis.get("label", "benign")
+            reason = analysis.get("reason", "Text analysis")
+            source = analysis.get("source", "heuristic")
+
+            return self._final_decision(
+                input_type="text",
+                score=risk,
+                label=label,
+                reason=reason,
+                source=source,
+                analysis={"text": text[:300]},
+            )
 
         # ---------- PASSWORD ----------
         if input_type == "password":
             pwd = body.get("password", "")
 
-            analysis = self.password_checker.check_password(pwd)
+            analysis = self.password_checker.check_password(pwd) or {}
 
             risk = int(analysis.get("risk_score", 0))
             compromised = analysis.get("compromised", False)
-
             label = "malicious" if compromised else "benign"
 
             return self._final_decision(
