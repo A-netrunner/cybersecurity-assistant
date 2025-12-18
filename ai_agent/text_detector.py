@@ -21,7 +21,7 @@ from typing import Dict, Any
 from pathlib import Path
 
 from config.settings import settings
-from .utils import extract_urls, contains_phishing_keywords, simple_phish_score
+from .utils import extract_urls, contains_phishing_keywords, simple_phish_score,modern_phish_score
 
 # ------------------ OPTIONAL OPENAI ------------------
 try:
@@ -142,7 +142,12 @@ class TextDetector:
                 pass
 
         # ===== 3️⃣ HEURISTIC FALLBACK =====
-        heuristic = simple_phish_score(text)
+        legacy_score = simple_phish_score(text)
+        modern_score = modern_phish_score(text)
+
+        # Hybrid SOC-safe scoring
+        heuristic = max(legacy_score, modern_score)
+
         found_kw, matched = contains_phishing_keywords(text)
 
         if heuristic >= 70:
@@ -158,10 +163,22 @@ class TextDetector:
         if found_kw:
             reason_parts.append(f"keywords={matched}")
 
-        return {
-            "label": label,
-            "reason": "; ".join(reason_parts) or "heuristic analysis",
-            "risk_score": heuristic,
-            "urls": urls,
-            "source": "heuristic"
+        # ---------- Explainable hybrid reasoning ----------
+        reason_parts = []
+
+        if legacy_score >= 35:
+            reason_parts.append("legacy phishing patterns detected")
+        if modern_score >= 35:
+            reason_parts.append("modern phishing behavior detected")
+        reason = "; ".join(reason_parts) or "heuristic analysis"
+
+
+        return 
+        {
+        "label": label,
+        "reason": reason,
+        "risk_score": heuristic,
+        "urls": urls,
+        "source": "heuristic",
         }
+
