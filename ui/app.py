@@ -35,7 +35,8 @@ with tab1:
 
     if option == "URL":
         value = st.text_input("Enter URL (defanged allowed)")
-        endpoint = "/analyze/url"
+        endpoint = "/agent/route"
+        payload = {"type": "url", "url": value}
         payload_key = "url"
 
     elif option == "Text":
