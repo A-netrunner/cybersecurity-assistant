@@ -1,100 +1,71 @@
 # ai_agent/password_checker.py
+"""
+PasswordChecker (SECURITY AGENT)
+
+Hybrid approach:
+- Local breached hash list
+- Optional HIBP k-anonymity (privacy-safe)
+- Entropy heuristics
+- Optional zxcvbn scoring
+
+Returns AGENT-NORMALIZED output:
+{
+  label: malicious | suspicious | benign
+  risk_score: 0..100
+  reason: explanation
+  details: {...}
+}
+"""
+
 import hashlib
 import math
 import time
-import os
 from pathlib import Path
 from typing import Optional
 
 from config.settings import settings
 
-# Optional dependency: zxcvbn for better password strength scoring.
+# Optional dependency
 try:
-    from zxcvbn import zxcvbn  # pip package: zxcvbn
+    from zxcvbn import zxcvbn
     _HAS_ZXCVBN = True
 except Exception:
     _HAS_ZXCVBN = False
 
-# Config-driven file paths (set in config.settings or .env)
+# ------------------ CONFIG ------------------
 COMMON_FILE = Path(getattr(settings, "COMMON_PASSWORDS_FILE", "data/common_passwords.txt"))
 BREACHED_FILE = Path(getattr(settings, "BREACHED_SHA1_FILE", "data/breached_sha1.txt"))
 
-# HIBP toggle and cache TTL (only used if ENABLE_HIBP is True)
 ENABLE_HIBP = getattr(settings, "ENABLE_HIBP", False)
 _HIBP_CACHE = {}
-_HIBP_CACHE_TTL = getattr(settings, "HIBP_CACHE_TTL", 60 * 60)  # seconds
+_HIBP_CACHE_TTL = getattr(settings, "HIBP_CACHE_TTL", 60 * 60)
 
 
 class PasswordChecker:
     def __init__(self, common_list_path: Optional[str] = None, breached_file_path: Optional[str] = None):
-        # load common passwords
+        # ---- Common passwords ----
         self.common_set = set()
-        path = common_list_path or COMMON_FILE
-        try:
-            if Path(path).exists():
-                for ln in Path(path).read_text(encoding="utf-8", errors="ignore").splitlines():
-                    pw = ln.strip()
-                    if pw:
-                        self.common_set.add(pw.lower())
-        except Exception:
-            self.common_set = set()
+        path = Path(common_list_path) if common_list_path else COMMON_FILE
+        if path.exists():
+            for ln in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if ln.strip():
+                    self.common_set.add(ln.strip().lower())
 
-        # load breached sha1 hashes (uppercase)
+        # ---- Breached hashes ----
         self.breached_set = set()
-        bpath = breached_file_path or BREACHED_FILE
-        try:
-            if Path(bpath).exists():
-                for ln in Path(bpath).read_text(encoding="utf-8", errors="ignore").splitlines():
-                    ln = ln.strip()
-                    if not ln:
-                        continue
-                    if ":" in ln:
-                        ln = ln.split(":", 1)[0]
-                    self.breached_set.add(ln.upper())
-        except Exception:
-            self.breached_set = set()
+        bpath = Path(breached_file_path) if breached_file_path else BREACHED_FILE
+        if bpath.exists():
+            for ln in bpath.read_text(encoding="utf-8", errors="ignore").splitlines():
+                ln = ln.strip()
+                if not ln:
+                    continue
+                if ":" in ln:
+                    ln = ln.split(":", 1)[0]
+                self.breached_set.add(ln.upper())
 
+    # ------------------ HELPERS ------------------
     def _sha1(self, pwd: str) -> str:
         return hashlib.sha1(pwd.encode("utf-8")).hexdigest().upper()
-
-    def _hibp_k_anonymity(self, sha1: str) -> int:
-        """
-        Query HIBP range API with k-anonymity. Returns count (0 if none), -1 on error.
-        Uses a small in-memory cache keyed by prefix.
-        """
-        prefix = sha1[:5]
-        suffix = sha1[5:].upper()
-
-        now = time.time()
-        cached = _HIBP_CACHE.get(prefix)
-        if cached and (now - cached["ts"]) < _HIBP_CACHE_TTL:
-            body = cached["body"]
-        else:
-            url = f"https://api.pwnedpasswords.com/range/{prefix}"
-            try:
-                import requests
-                resp = requests.get(url, timeout=10)
-                if resp.status_code != 200:
-                    return -1
-                body = resp.text
-                _HIBP_CACHE[prefix] = {"ts": now, "body": body}
-            except Exception:
-                return -1
-
-        for line in body.splitlines():
-            if not line:
-                continue
-            parts = line.split(":")
-            if len(parts) != 2:
-                continue
-            suf = parts[0].strip().upper()
-            count = parts[1].strip()
-            if suf == suffix:
-                try:
-                    return int(count)
-                except Exception:
-                    return -1
-        return 0
 
     def _entropy_bits(self, pwd: str) -> float:
         pool = 0
@@ -106,9 +77,7 @@ class PasswordChecker:
             pool += 10
         if any(not c.isalnum() for c in pwd):
             pool += 32
-        if pool == 0:
-            return 0.0
-        return math.log2(pool) * len(pwd)
+        return math.log2(pool) * len(pwd) if pool else 0.0
 
     def _zxcvbn_score(self, pwd: str):
         if not _HAS_ZXCVBN:
@@ -116,80 +85,101 @@ class PasswordChecker:
         try:
             res = zxcvbn(pwd)
             return {
-                "score": res.get("score", None),  # 0..4
-                "guesses": res.get("guesses", None),
-                "entropy": res.get("entropy", None)
+                "score": res.get("score"),
+                "guesses": res.get("guesses"),
+                "entropy": res.get("entropy")
             }
         except Exception:
             return None
 
-    def check_password(self, pwd: str):
-        pwd = pwd or ""
-        sha1 = self._sha1(pwd)
-        is_common = pwd.lower() in self.common_set if pwd else False
+    # ------------------ HIBP ------------------
+    def _hibp_k_anonymity(self, sha1: str) -> int:
+        prefix, suffix = sha1[:5], sha1[5:]
+        now = time.time()
 
-        # local breached set lookup
-        is_breached_local = sha1 in self.breached_set
-
-        # optional HIBP check (only if enabled)
-        hibp_count = None
-        if ENABLE_HIBP:
-            try:
-                hibp_count = self._hibp_k_anonymity(sha1)
-            except Exception:
-                hibp_count = -1
-
-        # pick breached result: prefer HIBP if enabled and successful, else local
-        if ENABLE_HIBP and (hibp_count is not None) and (hibp_count != -1):
-            pwned_count = hibp_count
+        cached = _HIBP_CACHE.get(prefix)
+        if cached and now - cached["ts"] < _HIBP_CACHE_TTL:
+            body = cached["body"]
         else:
-            pwned_count = -1 if ENABLE_HIBP and hibp_count == -1 else (1 if is_breached_local else 0)
+            import requests
+            try:
+                r = requests.get(
+                    f"https://api.pwnedpasswords.com/range/{prefix}",
+                    timeout=10
+                )
+                if r.status_code != 200:
+                    return -1
+                body = r.text
+                _HIBP_CACHE[prefix] = {"ts": now, "body": body}
+            except Exception:
+                return -1
 
-        # entropy heuristics and zxcvbn
+        for line in body.splitlines():
+            if ":" not in line:
+                continue
+            suf, cnt = line.split(":", 1)
+            if suf.strip().upper() == suffix:
+                try:
+                    return int(cnt)
+                except Exception:
+                    return -1
+        return 0
+
+    # ------------------ MAIN AGENT ------------------
+    def check_password(self, pwd: str) -> dict:
+        pwd = pwd or ""
+        if not pwd:
+            return {
+                "label": "benign",
+                "risk_score": 0,
+                "reason": "empty password",
+                "source": "input",
+            }
+
+        sha1 = self._sha1(pwd)
         entropy_bits = self._entropy_bits(pwd)
         zx = self._zxcvbn_score(pwd)
 
-        # strength label
-        if is_common:
-            strength = "very_weak"
-        elif entropy_bits < 28:
-            strength = "very_weak"
-        elif entropy_bits < 40:
-            strength = "weak"
-        elif entropy_bits < 60:
-            strength = "reasonable"
-        else:
-            strength = "strong"
+        is_common = pwd.lower() in self.common_set
+        is_breached_local = sha1 in self.breached_set
 
-        # risk score 0..100
-        if pwned_count and pwned_count > 0:
-            risk_score = 100
-            compromised = True
-        elif pwned_count == 0:
-            compromised = False
-            risk_score = int(max(0, min(100, round(100 - (entropy_bits / 80.0 * 100)))))
-            if is_common:
-                risk_score = max(risk_score, 85)
+        hibp_count = None
+        if ENABLE_HIBP:
+            hibp_count = self._hibp_k_anonymity(sha1)
+
+        # ---- Compromise determination ----
+        if ENABLE_HIBP and hibp_count not in (None, -1):
+            pwned_count = hibp_count
         else:
-            # pwned_count == -1 (unknown) -> conservative risk
-            compromised = None
-            risk_score = 70
+            pwned_count = 1 if is_breached_local else 0
+
+        # ---- Risk scoring ----
+        if pwned_count > 0:
+            risk_score = 100
+            label = "malicious"
+            reason = "password found in breach database"
+        else:
+            base = int(100 - min(100, (entropy_bits / 80) * 100))
+            if is_common:
+                base = max(base, 85)
+            risk_score = base
+
+            if risk_score >= 70:
+                label = "suspicious"
+                reason = "weak or predictable password"
+            else:
+                label = "benign"
+                reason = "no breach indicators"
 
         return {
-            "entropy_bits": round(entropy_bits, 2),
-            "zxcvbn": zx,
-            "pwned_count": pwned_count,
-            "compromised": compromised,
-            "common_password": is_common,
-            "strength": strength,
-            "risk_score": risk_score,
+            "label": label,
+            "risk_score": int(max(0, min(100, risk_score))),
+            "reason": reason,
+            "details": {
+                "entropy_bits": round(entropy_bits, 2),
+                "zxcvbn": zx,
+                "common_password": is_common,
+                "pwned_count": pwned_count,
+            },
+            "source": "password-agent",
         }
-
-# Convenience for quick CLI debug
-if __name__ == "__main__":
-    pc = PasswordChecker()
-    while True:
-        pw = input("Password (empty to exit): ").strip()
-        if not pw:
-            break
-        print(pc.check_password(pw))
