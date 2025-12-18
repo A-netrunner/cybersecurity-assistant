@@ -36,18 +36,26 @@ with tab1:
     if option == "URL":
         value = st.text_input("Enter URL (defanged allowed)")
         endpoint = "/agent/route"
-        payload = {"type": "url", "url": value}
-        payload_key = "url"
+        payload = {"type": "url","url": value.strip()
+}
+
+        #payload_key = "url"
 
     elif option == "Text":
         value = st.text_area("Enter Email / SMS / Message")
-        endpoint = "/analyze/text"
-        payload_key = "text"
+        endpoint = "/agent/route"
+        payload = {"type": "text","text": value.strip()
+}
+
+        #payload_key = "text"
 
     else:
         value = st.text_input("Enter Password", type="password")
-        endpoint = "/analyze/password"
-        payload_key = "password"
+        endpoint = "/agent/route"
+        payload = {"type": "password","password": value}
+
+
+        #payload_key = "password"
 
     if st.button("Analyze"):
         if not value.strip():

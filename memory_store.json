@@ -3069,11 +3069,71 @@
             "combined_score": 0,
             "action": "ignore",
             "reason": "URL risk_score 0"
+        },
+        {
+            "type": null,
+            "action": "ignore",
+            "combined_score": 0,
+            "confidence": "low",
+            "reason": "No significant threat indicators",
+            "policy": "low_risk_policy",
+            "analysis_source": "unknown",
+            "analysis": {
+                "url": "http://secure-login-paypal.com/verify"
+            }
+        },
+        {
+            "type": null,
+            "action": "ignore",
+            "combined_score": 0,
+            "confidence": "low",
+            "reason": "No significant threat indicators",
+            "policy": "low_risk_policy",
+            "analysis_source": "unknown",
+            "analysis": {
+                "url": "hxxp://secure-login-paypal.com/verify"
+            }
+        },
+        {
+            "type": null,
+            "action": "ignore",
+            "combined_score": 0,
+            "confidence": "low",
+            "reason": "No significant threat indicators",
+            "policy": "low_risk_policy",
+            "analysis_source": "unknown",
+            "analysis": {
+                "url": "hxxp://secure-login-paypal.com/verify"
+            }
+        },
+        {
+            "type": null,
+            "action": "ignore",
+            "combined_score": 0,
+            "confidence": "low",
+            "reason": "No significant threat indicators",
+            "policy": "low_risk_policy",
+            "analysis_source": "unknown",
+            "analysis": {
+                "url": "http://login-update-info.example.com"
+            }
+        },
+        {
+            "type": null,
+            "action": "ignore",
+            "combined_score": 0,
+            "confidence": "low",
+            "reason": "No significant threat indicators",
+            "policy": "low_risk_policy",
+            "analysis_source": "unknown",
+            "analysis": {
+                "url": "hxxp://accounts-paypal-update.example/security/verify/session?id=874233&redirect=login"
+            }
         }
     ],
     "long_term": {
-        "total_events": 4,
-        "avg_risk_score": 11.25,
+        "total_events": 9,
+        "avg_risk_score": 5.0,
         "top_malicious_urls": {
             "https://console.prisma.io/login": 1,
             "https://www.1tamilmv.pink/": 1,
