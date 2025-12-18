@@ -115,5 +115,10 @@ def modern_phish_score(text: str) -> int:
     if "urgent" not in t and "immediately" not in t and score > 40:
         score += 10
 
+   # Elevate confidence if modern SaaS-style phishing detected
+    if score >= 50:
+        score += 25
+
     return min(score, 100)
+
 

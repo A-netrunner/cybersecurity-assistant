@@ -150,12 +150,14 @@ class TextDetector:
 
         found_kw, matched = contains_phishing_keywords(text)
 
+        # ---------- FINAL LABEL DECISION ----------# 
         if heuristic >= 70:
             label = "malicious"
         elif heuristic >= 35:
             label = "suspicious"
         else:
             label = "benign"
+
 
         reason_parts = []
         if urls:
@@ -173,8 +175,7 @@ class TextDetector:
         reason = "; ".join(reason_parts) or "heuristic analysis"
 
 
-        return 
-        {
+        return{
         "label": label,
         "reason": reason,
         "risk_score": heuristic,
