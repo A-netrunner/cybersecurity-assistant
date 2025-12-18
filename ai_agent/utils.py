@@ -73,3 +73,47 @@ def simple_phish_score(text: str) -> int:
     # clamp
     score = max(0, min(100, score))
     return score
+
+# ------------------ MODERN PHISHING HEURISTIC (2024–2025) ------------------
+
+def modern_phish_score(text: str) -> int:
+    """
+    Detects modern phishing based on intent, context ambiguity,
+    SaaS/OAuth abuse, and calm authoritative tone.
+    """
+    score = 0
+    t = text.lower()
+
+    # Intent to authenticate / access
+    if any(p in t for p in [
+        "sign in", "log in", "continue", "access your",
+        "review activity", "new device", "session"
+    ]):
+        score += 30
+
+    # Context ambiguity / authority without identity
+    if any(p in t for p in [
+        "we noticed", "security team", "admin",
+        "automated message", "this request"
+    ]):
+        score += 25
+
+    # Action without clear justification
+    if any(p in t for p in [
+        "review", "open", "check", "view details"
+    ]) and "because" not in t:
+        score += 15
+
+    # OAuth / SaaS abuse patterns
+    if any(p in t for p in [
+        "shared a document", "invited you",
+        "permission request", "access granted"
+    ]):
+        score += 20
+
+    # Calm but directive tone (modern phishing trait)
+    if "urgent" not in t and "immediately" not in t and score > 40:
+        score += 10
+
+    return min(score, 100)
+
