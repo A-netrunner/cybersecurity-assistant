@@ -87,3 +87,12 @@ def risk_trend_chart(events: list):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+# ---------- CONFIDENCE LABEL ----------
+def confidence_label(score: int):
+    if score >= 80:
+        return "High"
+    elif score >= 40:
+        return "Medium"
+    return "Low"
+
