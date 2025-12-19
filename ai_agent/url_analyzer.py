@@ -1,17 +1,20 @@
 # ai_agent/url_analyzer.py
 """
-UrlAnalyzer (Hybrid Agent)
+UrlAnalyzer (Hybrid + Modern Agent)
 
 Features:
 - Defanged URL normalization (hxxp, [.] support)
 - ML-based detection (if model exists)
 - VirusTotal integration (optional)
-- Strong heuristic fallback (brand + auth detection)
+- Legacy heuristic fallback
+- Modern 2024–2025 URL phishing detection
 - Agent-normalized output
 """
 
 from pathlib import Path
 from typing import Dict, Any
+from urllib.parse import urlparse
+import math
 import re
 
 from config.settings import settings
@@ -33,13 +36,8 @@ except Exception:
 
 MODEL_DIR = Path("ml_models")
 
-
 # ---------------- URL NORMALIZATION ----------------
 def normalize_url(url: str) -> str:
-    """
-    Converts defanged URLs to analyzable form
-    without making them clickable.
-    """
     if not url:
         return url
     return (
@@ -66,19 +64,17 @@ class UrlAnalyzer:
         # ---- VirusTotal ----
         self.vt_api_key = settings.VT_API_KEY
 
-    # ---------------- HEURISTIC SCORING ----------------
-    def _heuristic_score(self, url: str) -> int:
+    # ---------------- LEGACY HEURISTIC ----------------
+    def _legacy_heuristic_score(self, url: str) -> int:
         score = 0
         u = url.lower()
 
-        # --- Brand + Authentication words (HIGH CONFIDENCE PHISHING) ---
         brands = ["paypal", "google", "microsoft", "apple", "bank", "icloud"]
         auth_words = ["login", "verify", "secure", "account", "update", "confirm"]
 
         if any(b in u for b in brands) and any(a in u for a in auth_words):
             score += 45
 
-        # --- Structural indicators ---
         if u.startswith("http://"):
             score += 15
 
@@ -90,6 +86,43 @@ class UrlAnalyzer:
 
         if any(tld in u for tld in [".xyz", ".top", ".site", ".online", ".support"]):
             score += 15
+
+        return min(score, 100)
+
+    # ---------------- MODERN URL HEURISTIC (2024–2025) ----------------
+    def _modern_url_score(self, url: str) -> int:
+        score = 0
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        path = parsed.path.lower()
+        query = parsed.query
+
+        # Excessive subdomains
+        if domain.count(".") >= 3:
+            score += 20
+
+        # Brand impersonation (not official domain)
+        brands = ["paypal", "google", "microsoft", "apple", "amazon"]
+        for brand in brands:
+            if brand in domain and not domain.endswith(f"{brand}.com"):
+                score += 30
+                break
+
+        # Login / session intent paths
+        suspicious_paths = [
+            "login", "signin", "verify", "session",
+            "auth", "security", "update", "confirm"
+        ]
+        if any(p in path for p in suspicious_paths):
+            score += 25
+
+        # High-entropy query string
+        if query and self._entropy(query) > 3.5:
+            score += 15
+
+        # Long URL
+        if len(url) > 75:
+            score += 10
 
         return min(score, 100)
 
@@ -130,24 +163,17 @@ class UrlAnalyzer:
                 "source": "input"
             }
 
-        # Normalize defanged URLs
         normalized_url = normalize_url(url)
 
-        # ===== 1️⃣ ML MODEL (PRIMARY) =====
+        # ===== 1️⃣ ML MODEL =====
         if self.ml_model and self.vectorizer:
             try:
                 vec = self.vectorizer.transform([normalized_url])
                 prob = self.ml_model.predict_proba(vec)[0][1]
                 score = int(prob * 100)
 
-                label = (
-                    "malicious" if score >= 70
-                    else "suspicious" if score >= 40
-                    else "benign"
-                )
-
                 return {
-                    "label": label,
+                    "label": "malicious" if score >= 70 else "suspicious" if score >= 40 else "benign",
                     "risk_score": score,
                     "reason": "ML model prediction",
                     "source": "ml",
@@ -156,34 +182,35 @@ class UrlAnalyzer:
             except Exception:
                 pass
 
-        # ===== 2️⃣ VIRUSTOTAL (SECONDARY) =====
+        # ===== 2️⃣ VIRUSTOTAL =====
         vt_score = await self._scan_virustotal(normalized_url)
         if vt_score is not None:
-            label = (
-                "malicious" if vt_score >= 70
-                else "suspicious" if vt_score >= 40
-                else "benign"
-            )
             return {
-                "label": label,
+                "label": "malicious" if vt_score >= 70 else "suspicious" if vt_score >= 40 else "benign",
                 "risk_score": vt_score,
                 "reason": "VirusTotal analysis",
                 "source": "virustotal",
                 "normalized_url": normalized_url
             }
 
-        # ===== 3️⃣ HEURISTIC FALLBACK =====
-        heuristic = self._heuristic_score(normalized_url)
-        label = (
-            "malicious" if heuristic >= 70
-            else "suspicious" if heuristic >= 40
-            else "benign"
-        )
+        # ===== 3️⃣ HYBRID HEURISTIC =====
+        legacy_score = self._legacy_heuristic_score(normalized_url)
+        modern_score = self._modern_url_score(normalized_url)
+
+        final_score = max(legacy_score, modern_score)
 
         return {
-            "label": label,
-            "risk_score": heuristic,
-            "reason": "heuristic URL analysis",
+            "label": "malicious" if final_score >= 70 else "suspicious" if final_score >= 40 else "benign",
+            "risk_score": final_score,
+            "reason": (
+                "legacy + modern url phishing indicators"
+                if final_score > 0 else "heuristic url analysis"
+            ),
             "source": "heuristic",
             "normalized_url": normalized_url
         }
+
+    # ---------------- ENTROPY ----------------
+    def _entropy(self, s: str) -> float:
+        probs = [float(s.count(c)) / len(s) for c in set(s)]
+        return -sum(p * math.log2(p) for p in probs)
