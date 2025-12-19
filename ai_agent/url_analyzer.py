@@ -6,8 +6,9 @@ Features:
 - Defanged URL normalization (hxxp, [.] support)
 - ML-based detection (if model exists)
 - VirusTotal integration (optional)
-- Legacy heuristic fallback
-- Modern 2024–2025 URL phishing detection
+- Legacy heuristic detection
+- Modern 2024–2025 phishing URL detection
+- Document-sharing SaaS phishing detection
 - Agent-normalized output
 """
 
@@ -15,7 +16,6 @@ from pathlib import Path
 from typing import Dict, Any
 from urllib.parse import urlparse
 import math
-import re
 
 from config.settings import settings
 
@@ -97,18 +97,18 @@ class UrlAnalyzer:
         path = parsed.path.lower()
         query = parsed.query
 
-        # Excessive subdomains
+        # --- Excessive subdomains ---
         if domain.count(".") >= 3:
             score += 20
 
-        # Brand impersonation (not official domain)
+        # --- Brand impersonation ---
         brands = ["paypal", "google", "microsoft", "apple", "amazon"]
         for brand in brands:
             if brand in domain and not domain.endswith(f"{brand}.com"):
                 score += 30
                 break
 
-        # Login / session intent paths
+        # --- Login / auth intent ---
         suspicious_paths = [
             "login", "signin", "verify", "session",
             "auth", "security", "update", "confirm"
@@ -116,11 +116,30 @@ class UrlAnalyzer:
         if any(p in path for p in suspicious_paths):
             score += 25
 
-        # High-entropy query string
+        # --- Document-sharing phishing (IMPORTANT FIX) ---
+        doc_paths = [
+            "shared", "share", "document", "docs",
+            "file", "view", "open"
+        ]
+
+        trusted_docs_domains = [
+            "google.com",
+            "drive.google.com",
+            "docs.google.com",
+            "dropbox.com",
+            "onedrive.live.com",
+            "sharepoint.com"
+        ]
+
+        if any(p in path for p in doc_paths):
+            if not any(domain.endswith(td) for td in trusted_docs_domains):
+                score += 30
+
+        # --- High-entropy query ---
         if query and self._entropy(query) > 3.5:
             score += 15
 
-        # Long URL
+        # --- Long URL ---
         if len(url) > 75:
             score += 10
 
@@ -202,10 +221,7 @@ class UrlAnalyzer:
         return {
             "label": "malicious" if final_score >= 70 else "suspicious" if final_score >= 40 else "benign",
             "risk_score": final_score,
-            "reason": (
-                "legacy + modern url phishing indicators"
-                if final_score > 0 else "heuristic url analysis"
-            ),
+            "reason": "legacy + modern url phishing indicators",
             "source": "heuristic",
             "normalized_url": normalized_url
         }
