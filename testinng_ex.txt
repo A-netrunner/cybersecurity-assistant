@@ -1,0 +1,238 @@
+URL TEST CASES (DEMO READY)
+🟢 1️⃣ BENIGN URL
+
+Input
+
+https://www.google.com/search?q=cybersecurity
+
+
+Expected
+
+label: benign
+combined_score: <20
+action: ignore
+
+
+Explain
+
+Trusted domain, no impersonation, no auth intent.
+
+🟡 2️⃣ SUSPICIOUS URL (Document Phishing)
+
+Input
+
+https://secure-docs.example.com/shared/view?id=77
+
+
+Expected
+
+label: suspicious
+combined_score: 45–55
+action: log
+
+
+Explain
+
+Document-sharing path on a non-trusted domain — common SaaS phishing pattern.
+
+🔴 3️⃣ MALICIOUS URL (Credential Harvesting)
+
+Input
+
+hxxp://accounts-paypal-update.example.com/security/verify/session?id=928374
+
+
+Expected
+
+label: malicious
+combined_score: 80–90
+action: alert
+
+
+Explain
+
+Brand impersonation + authentication flow = high-risk phishing.
+
+🔴 4️⃣ OAuth / Session Phishing
+
+Input
+
+https://login.microsoft-support.example.net/auth/continue
+
+
+Expected
+
+label: malicious
+combined_score: 75+
+action: alert
+
+
+Explain
+
+OAuth-style session continuation phishing.
+
+✉️ TEXT TEST CASES (MODERN PHISHING)
+🟢 5️⃣ BENIGN TEXT
+
+Input
+
+Hey, are we still meeting at 3 PM today?
+
+
+Expected
+
+label: benign
+combined_score: <10
+action: ignore
+
+
+Explain
+
+No intent, no authority, no action request.
+
+🟡 6️⃣ SUSPICIOUS TEXT (Low-Noise)
+
+Input
+
+Please review the attached request when you have time.
+
+
+Expected
+
+label: suspicious
+combined_score: 35–45
+action: log
+
+
+Explain
+
+Vague action request, no clear context.
+
+🔴 7️⃣ MALICIOUS TEXT (Modern SaaS Phishing)
+
+Input
+
+A document has been shared with you.
+Review access permissions to continue.
+
+
+Expected
+
+label: malicious
+combined_score: 75–85
+action: alert
+reason: modern phishing behavior detected
+
+
+Explain
+
+Document-sharing + access continuation — modern phishing.
+
+🔴 8️⃣ MFA / Session Abuse
+
+Input
+
+We noticed a new device signed into your account.
+Confirm your session to avoid interruption.
+
+
+Expected
+
+label: malicious
+combined_score: 80+
+action: alert
+
+
+Explain
+
+Session hijack + calm authority tone.
+
+🔐 PASSWORD TEST CASES
+🔴 9️⃣ VERY WEAK / COMMON PASSWORD
+
+Input
+
+password123
+
+
+Expected
+
+strength: very_weak
+risk_score: 85+
+action: alert
+
+
+Explain
+
+Common password + low entropy.
+
+🟡 🔟 WEAK PASSWORD
+
+Input
+
+Welcome@123
+
+
+Expected
+
+strength: weak
+risk_score: 50–60
+action: log
+
+
+Explain
+
+Predictable pattern despite symbols.
+
+🟢 1️⃣1️⃣ STRONG PASSWORD
+
+Input
+
+X9#fP2!Lq8@M
+
+
+Expected
+
+strength: strong
+risk_score: <20
+action: ignore
+
+
+Explain
+
+High entropy, non-predictable.
+
+🔴 1️⃣2️⃣ BREACHED-STYLE PASSWORD (Demo)
+
+Input
+
+letmein
+
+
+Expected
+
+compromised: true (if local list)
+risk_score: 100
+action: alert
+
+
+Explain
+
+Found in breached/common password datasets.
+
+🧠 BONUS DEMO (IMPRESS GUIDE)
+🔗 URL + TEXT COMBINATION
+
+Text
+
+A document has been shared with you.
+
+
+URL
+
+https://secure-docs.example.com/shared/view?id=77
+
+
+Explain
+
+Individually suspicious → combined confidence increases → SOC escalation (future work).

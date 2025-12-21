@@ -36,8 +36,8 @@
       },
       {
         "parameters": {
-          "fromEmail": "your_email@gmail.com",
-          "toEmail": "receiver_email@gmail.com",
+          "fromEmail": "mememaking88@gmail.com",
+          "toEmail": "shravanr2404@gmail.com",
           "subject": "🚨 Cybersecurity Alert – High Risk Event",
           "text": "🚨 CYBERSECURITY ALERT 🚨\n\nType: {{$json[\"type\"]}}\nAction: {{$json[\"action\"]}}\nRisk Score: {{$json[\"combined_score\"] || $json[\"risk_score\"]}}\nConfidence: {{$json[\"confidence\"]}}\nReason: {{$json[\"reason\"]}}\n\nGenerated At: {{$now}}"
         },

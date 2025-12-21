@@ -103,7 +103,10 @@ def _bg_send_responders(decision: dict) -> None:
             import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+            print(decision)
             res = loop.run_until_complete(n8n_responder.trigger_workflow(decision))
+            print("Post trigger n8n\n")
+            print(decision)
             logger.info("n8n responder result: %s", res)
             loop.close()
         except Exception as e:
