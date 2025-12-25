@@ -4,6 +4,8 @@ from typing import Dict, Any
 from ai_agent.url_analyzer import UrlAnalyzer
 from ai_agent.text_detector import TextDetector
 from ai_agent.password_checker import PasswordChecker
+from ai_agent.url_heuristics import analyze_url_heuristics
+from ai_agent.scoring import calculate_final_score
 
 
 class AgentDecision:
@@ -48,20 +50,47 @@ class AgentDecision:
             raw_url = body.get("url", "")
             normalized_url = self._normalize_url(raw_url)
 
+            # Existing reputation-based analysis
             analysis = await self.url_analyzer.scan_url(normalized_url) or {}
 
-            risk = int(analysis.get("risk_score", 0))
-            label = analysis.get("label", "benign")
-            reason = analysis.get("reason", "URL analysis")
-            source = analysis.get("source", "heuristic")
+            reputation_score = int(analysis.get("risk_score", 0))
+
+            # 🔥 NEW: zero-day phishing heuristics
+            heuristics = analyze_url_heuristics(normalized_url)
+            heuristic_score = int(heuristics.get("heuristic_score", 0))
+
+            # 🔥 FINAL SCORE (FIX)
+            final_score = calculate_final_score(
+                heuristic_score,
+                reputation_score
+            )
+
+            label = (
+                "malicious"
+                if final_score >= 70
+                else "suspicious"
+                if final_score >= 40
+                else "benign"
+            )
+
+            reason = (
+                " | ".join(heuristics.get("heuristic_reasons", []))
+                if heuristics.get("heuristic_reasons")
+                else analysis.get("reason", "URL analysis")
+            )
 
             return self._final_decision(
                 input_type="url",
-                score=risk,
+                score=final_score,
                 label=label,
                 reason=reason,
-                source=source,
-                analysis={"url": normalized_url},
+                source="heuristic+reputation",
+                analysis={
+                    "url": normalized_url,
+                    "reputation_score": reputation_score,
+                    "heuristic_score": heuristic_score,
+                    "heuristic_reasons": heuristics.get("heuristic_reasons", []),
+                },
             )
 
         # ---------- TEXT ----------

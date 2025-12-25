@@ -69,7 +69,7 @@ class UrlAnalyzer:
         score = 0
         u = url.lower()
 
-        brands = ["paypal", "google", "microsoft", "apple", "bank", "icloud"]
+        brands = ["paypal", "google", "microsoft", "apple", "bank", "icloud",] #"Blinkit"
         auth_words = ["login", "verify", "secure", "account", "update", "confirm"]
 
         if any(b in u for b in brands) and any(a in u for a in auth_words):
